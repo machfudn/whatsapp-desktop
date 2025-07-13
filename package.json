@@ -1,0 +1,31 @@
+{
+  "name": "whatsapp-desktop",
+  "version": "1.0.0",
+  "description": "Unofficial WhatsApp Desktop using Electron",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "author": "Machfudin",
+  "license": "MIT",
+  "build": {
+    "appId": "id.machfudin.whatsapp",
+    "productName": "WhatsApp Desktop",
+    "files": [
+      "**/*"
+    ],
+    "mac": {
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.2.1"
+  }
+}
