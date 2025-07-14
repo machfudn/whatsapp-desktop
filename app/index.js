@@ -1,9 +1,10 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain } = require('electron');
 const path = require('path');
 
 let win;
 let tray = null;
 let aboutWin = null;
+let fullscreenButtonWin = null;
 
 function openAboutWindow() {
   // Jika jendela 'about' sudah terbuka, fokus saja
@@ -20,15 +21,42 @@ function openAboutWindow() {
     parent: win, // Jadikan sebagai child dari jendela utama
     modal: true, // Blokir interaksi dengan jendela utama
     autoHideMenuBar: true, // Sembunyikan menu di jendela 'about'
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
   });
 
-  aboutWin.loadFile(path.join(__dirname, 'about.html'));
+  aboutWin.loadFile(path.join(__dirname, '..', 'about.html'));
 
   // Reset variabel saat jendela ditutup
   aboutWin.on('closed', () => {
     aboutWin = null;
   });
+}
+
+function createFullscreenButtonWindow() {
+  if (fullscreenButtonWin) {
+    return;
+  }
+  const mainBounds = win.getBounds();
+  fullscreenButtonWin = new BrowserWindow({
+    width: 200,
+    height: 50,
+    x: mainBounds.x + Math.round((mainBounds.width - 200) / 2),
+    y: mainBounds.y,
+    parent: win,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-fullscreen-button.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  fullscreenButtonWin.loadFile(path.join(__dirname, 'fullscreen-button.html'));
+  fullscreenButtonWin.on('closed', () => (fullscreenButtonWin = null));
 }
 
 function createWindow() {
@@ -38,7 +66,7 @@ function createWindow() {
     resizable: true,
     maximizable: true, // Pastikan tombol maximize/restore muncul
     title: app.getName(),
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -68,6 +96,19 @@ function createWindow() {
   win.on('close', function (event) {
     event.preventDefault();
     win.hide();
+  });
+
+  win.on('enter-full-screen', () => {
+    createFullscreenButtonWindow();
+    win.webContents.send('fullscreen-state-changed', true);
+  });
+
+  win.on('leave-full-screen', () => {
+    if (fullscreenButtonWin) {
+      fullscreenButtonWin.destroy();
+    }
+    fullscreenButtonWin = null;
+    win.webContents.send('fullscreen-state-changed', false);
   });
 }
 
@@ -143,7 +184,7 @@ app.whenReady().then(() => {
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
 
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png'));
+  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon.png'));
   tray = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([
@@ -172,6 +213,22 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+ipcMain.on('set-fullscreen-button-visibility', (event, visible) => {
+  if (fullscreenButtonWin) {
+    if (visible) {
+      fullscreenButtonWin.show();
+    } else {
+      fullscreenButtonWin.hide();
+    }
+  }
+});
+
+ipcMain.on('exit-fullscreen', () => {
+  if (win && win.isFullScreen()) {
+    win.setFullScreen(false);
+  }
 });
 
 app.on('window-all-closed', () => {

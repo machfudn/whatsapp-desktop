@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Fullscreen Button</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			-webkit-app-region: no-drag;
+			overflow: hidden;
+		}
+
+		button {
+			/* Light Mode Default */
+			background-color: rgba(250, 250, 250, 0.9);
+			color: #333;
+			border: 1px solid #e0e0e0;
+			box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+			padding: 8px 16px;
+			border-radius: 15px;
+			font-size: 14px;
+			cursor: pointer;
+			outline: none;
+			transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+		}
+
+		button:hover {
+			background-color: rgba(255, 255, 255, 1);
+		}
+
+		/* Dark Mode */
+		@media (prefers-color-scheme: dark) {
+			button {
+				background-color: rgba(45, 45, 45, 0.85);
+				color: #f0f0f0;
+				border: 1px solid #555;
+				box-shadow: none;
+			}
+
+			button:hover {
+				background-color: rgba(60, 60, 60, 1);
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<button id="exit-fullscreen-btn">Keluar dari Layar Penuh</button>
+</body>
+
+</html>
