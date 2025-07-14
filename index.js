@@ -53,6 +53,13 @@ function createWindow() {
     userAgent: userAgent,
   });
 
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    // Buka URL eksternal di browser default pengguna
+    shell.openExternal(url);
+    // Cegah Electron membuka jendela baru
+    return { action: 'deny' };
+  });
+
   win.on('minimize', function (event) {
     event.preventDefault();
     win.hide();
