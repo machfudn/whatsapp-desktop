@@ -1,10 +1,40 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain } = require('electron');
 const path = require('path');
+const Store = require('electron-store').default;
+
+const store = new Store();
 
 let win;
 let tray = null;
 let aboutWin = null;
 let fullscreenButtonWin = null;
+
+// --- MANAJEMEN PENGGUNA (DENGAN PENYIMPANAN) ---
+
+function loadUserData() {
+  let users = store.get('users');
+
+  // If no users exist in the store, or the list is empty, create and save a default.
+  if (!users || users.length === 0) {
+    const defaultUser = { name: 'User 1', partition: 'user-1' };
+    users = [defaultUser];
+    store.set('users', users);
+    store.set('currentUserPartition', defaultUser.partition);
+  }
+
+  const currentUserPartition = store.get('currentUserPartition');
+  let currentUser = users.find(u => u.partition === currentUserPartition);
+
+  // If the stored currentUserPartition is invalid (e.g., user was deleted), reset to the first user.
+  if (!currentUser) {
+    currentUser = users[0];
+    store.set('currentUserPartition', currentUser.partition);
+  }
+
+  return { users, currentUser };
+}
+
+let { users, currentUser } = loadUserData();
 
 function openAboutWindow() {
   // Jika jendela 'about' sudah terbuka, fokus saja
@@ -21,10 +51,10 @@ function openAboutWindow() {
     parent: win, // Jadikan sebagai child dari jendela utama
     modal: true, // Blokir interaksi dengan jendela utama
     autoHideMenuBar: true, // Sembunyikan menu di jendela 'about'
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+    icon: path.join(__dirname, 'assets', 'icon.png'),
   });
 
-  aboutWin.loadFile(path.join(__dirname, '..', 'about.html'));
+  aboutWin.loadFile(path.join(__dirname, 'about.html'));
 
   // Reset variabel saat jendela ditutup
   aboutWin.on('closed', () => {
@@ -59,15 +89,17 @@ function createFullscreenButtonWindow() {
   fullscreenButtonWin.on('closed', () => (fullscreenButtonWin = null));
 }
 
-function createWindow() {
+function createWindow(partition) {
   win = new BrowserWindow({
     width: 1100,
     height: 800,
     resizable: true,
     maximizable: true, // Pastikan tombol maximize/restore muncul
     title: app.getName(),
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
+      // Gunakan partisi dengan 'persist:' untuk menyimpan sesi (login, cookie, dll)
+      partition: `persist:${partition}`,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
@@ -112,12 +144,28 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-
-  // --- MEMBUAT MENU APLIKASI STANDAR DENGAN 'ABOUT' KUSTOM ---
-
+function buildMenu() {
   const isMac = process.platform === 'darwin';
+
+  // Membuat item menu untuk setiap pengguna
+  const userMenuItems = users.map((user, index) => ({
+    label: `${user.name}`,
+    type: 'radio',
+    checked: user.partition === currentUser.partition,
+    click: () => {
+      if (currentUser.partition === user.partition) return;
+
+      const oldWin = win;
+      currentUser = user;
+      store.set('currentUserPartition', currentUser.partition); // Simpan pengguna saat ini
+      console.log(`Berpindah ke pengguna: ${currentUser.name}`);
+
+      // Buat jendela baru SEBELUM menghancurkan yang lama untuk mencegah aplikasi quit
+      createWindow(currentUser.partition);
+      oldWin.destroy();
+      buildMenu(); // Bangun ulang menu
+    },
+  }));
 
   const menuTemplate = [
     // {app menu}
@@ -164,6 +212,39 @@ app.whenReady().then(() => {
         { role: 'togglefullscreen' },
       ],
     },
+    // {Users} menu
+    {
+      label: 'Users',
+      submenu: [
+        ...userMenuItems,
+        { type: 'separator' },
+        {
+          label: 'Add User',
+          click: () => {
+            const oldWin = win;
+            let uniquePartition;
+            let idx = users.length + 1;
+            do {
+              uniquePartition = `user-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+            } while (users.some(u => u.partition === uniquePartition));
+
+            const newUserName = `User ${idx}`;
+            const newUser = { name: newUserName, partition: uniquePartition };
+            users.push(newUser);
+            currentUser = newUser;
+            store.set('users', users);
+            store.set('currentUserPartition', currentUser.partition);
+
+            console.log(`Menambahkan dan berpindah ke pengguna: ${currentUser.name}`);
+
+            // Buat jendela baru SEBELUM menghancurkan yang lama
+            createWindow(currentUser.partition);
+            oldWin.destroy();
+            buildMenu();
+          },
+        },
+      ],
+    },
     // {Help} menu
     {
       role: 'help',
@@ -183,8 +264,14 @@ app.whenReady().then(() => {
 
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
+}
 
-  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'assets', 'icon.png'));
+app.whenReady().then(() => {
+  createWindow(currentUser.partition);
+
+  buildMenu();
+
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png'));
   tray = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([
@@ -211,7 +298,13 @@ app.whenReady().then(() => {
   tray.on('click', () => win.show());
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    // Pastikan untuk membuat jendela dengan partisi yang benar saat diaktifkan
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(currentUser.partition);
+  });
+
+  // Mencegah pembuatan tab/jendela baru dari Dock di macOS
+  app.on('new-window-for-tab', event => {
+    event.preventDefault();
   });
 });
 
