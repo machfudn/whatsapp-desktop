@@ -14,11 +14,30 @@
 			background-color: #fafafa;
 			color: #333;
 			overflow: hidden;
+			transition: background-color 0.3s, color 0.3s;
 		}
 
 		img {
 			width: 64px;
 			height: 64px;
+		}
+	</style>
+	<style>
+		/* Default (Light Mode) */
+		a {
+			color: #007bff;
+		}
+
+		/* Dark Mode */
+		@media (prefers-color-scheme: dark) {
+			body {
+				background-color: #2d2d2d;
+				color: #f0f0f0;
+			}
+
+			a {
+				color: #69b4f5;
+			}
 		}
 	</style>
 </head>
